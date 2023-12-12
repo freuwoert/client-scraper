@@ -2,6 +2,7 @@ const playwright = require('playwright')
 const { JsonDB, Config} = require('node-json-db')
 const crypto = require('crypto')
 const chalk = import("chalk").then(m => m.default)
+const prompt = require("prompt-sync")({ sigint: true })
 const { parseAddress, parseContactNumber, resolvePlaceholder } = require('./utils.js')
 
 let browser, context, page, log, chalk_, db, config
@@ -35,11 +36,13 @@ let browser, context, page, log, chalk_, db, config
             }
         },
         crawling: {
-            maxResults: 25,
+            maxResults: 50,
             minRequestDelay: 1000,
             maxRequestDelay: 3000,
         },
     }
+
+    config.crawling.maxResults = parseInt(prompt('Max. results: ')) ?? config.crawling.maxResults
     
     // Start crawling
     await crawlDasOertliche()
@@ -123,7 +126,9 @@ async function crawlDasOertliche()
             const link = await result.locator('h2 > a').first().getAttribute('href')
     
             // Get category
-            const category = await result.locator('.splitter .category').first().innerText()
+            const categoryProbe = await result.locator('.splitter .category').first()
+            let category = null
+            if (await categoryProbe.isVisible()) category = await categoryProbe.innerText()
             
             // Get and parse address
             const address = parseAddress((await result.locator('.splitter address').first().innerText()).split('\n').filter((line) => line !== '').join('|'))
@@ -162,7 +167,7 @@ async function crawlDasOertliche()
         log(`Added ${resultBatchCount} results (${await resultCount()} total)...`, 'green')
 
         // Go to next page
-        resultsFrom += config.resultsPerPage
+        resultsFrom += config.provider.dasoertliche.resultsPerPage
     }
 
     log(`Finished with ${await resultCount()} results!`, 'bgBlue')
@@ -197,12 +202,12 @@ async function crawlDetails()
         // Get website
         const websiteLink = await page.locator('.det_addrcont .lnks a.www')
         let website = ''
-        if (await websiteLink.isVisible()) { website = await websiteLink.innerText() }
+        if (await websiteLink.isVisible()) { website = (await websiteLink.innerText()).trim() }
         
         // Get email
         const emailLink = await page.locator('.det_addrcont .lnks a.mail')
         let email = ''
-        if (await emailLink.isVisible()) { email = await emailLink.innerText() }
+        if (await emailLink.isVisible()) { email = (await emailLink.innerText()).trim() }
     
         // Get email
         // const email = await page.locator('.det_addrcont .lnks > a.mail > span').first().innerText()
